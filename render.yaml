@@ -1,0 +1,54 @@
+# Render Blueprint for EVShare. Deploy this file from the evshare project root.
+# Paytm remains in STAGING mode by default. Add real test credentials in Render's
+# environment dashboard; never commit merchant secrets to source control.
+services:
+  - type: web
+    name: evshare-web
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_HOST
+        fromDatabase:
+          name: evshare-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: evshare-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: evshare-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: evshare-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: evshare-db
+          property: password
+      - key: PAYTM_ENVIRONMENT
+        value: STAGING
+      - key: PAYTM_WEBSITE_NAME
+        value: WEBSTAGING
+      - key: PAYTM_MID
+        sync: false
+      - key: PAYTM_MERCHANT_KEY
+        sync: false
+      - key: PAYTM_CALLBACK_URL
+        sync: false
+      - key: PAYTM_CHECKOUT_SCRIPT
+        value: https://securestage.paytmpayments.com/merchantpgpui/checkoutjs/merchants/
+
+databases:
+  - name: evshare-db
+    databaseName: evshare
+    user: evshare_user
+    region: singapore
+    plan: basic-256mb
