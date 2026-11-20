@@ -1,16 +1,18 @@
 # EVShare — Java EV Home-Charging Marketplace
 
-Spring Boot 3 / Java 17 application with a responsive browser UI, charger discovery, host listing, time-slot booking and estimated kWh-based pricing.
+Spring Boot 3 / Java 17 application with a responsive browser UI, charger discovery, host listings, time-slot reservations and estimated kWh-based pricing.
 
-## Current release status
+## Payment policy
 
-This is a **hardened deployment candidate, not yet a production launch**. Production infrastructure settings and database migrations are included, but real-money payments and account/role security must be completed and independently tested before public launch. Do not accept real customer payments or expose host addresses publicly with this release.
+**No online payment gateway is included.** Paytm, CheckoutJS, merchant credentials, payment callbacks, payment verification and payout integrations have been removed. Render is retained solely as an optional application hosting/deployment platform; it is not a payment provider and no Render payment integration exists in this application.
+
+EVShare records reservations and displays an estimated charging cost based on charger power, booking duration and the host's ₹/kWh rate. The actual charging amount should be calculated from metered energy delivered. Any settlement between the customer and host is handled independently, outside EVShare.
 
 ## Stack
 
 - Java 17, Spring Boot 3.3.5, Spring MVC, Spring Data JPA, Bean Validation
-- PostgreSQL for production; H2 only for local development
-- Flyway schema migration, Actuator health endpoints
+- PostgreSQL for production; H2 for local development
+- Flyway schema migrations, Actuator health endpoints
 - Static HTML/CSS/JavaScript frontend
 - Docker multi-stage image, non-root runtime user
 
@@ -25,80 +27,38 @@ mvn spring-boot:run
 
 Open `http://localhost:8080`. Demo chargers are seeded only in the `dev` profile. H2 console is enabled in dev only.
 
-## Production configuration
-
-Set `SPRING_PROFILES_ACTIVE=prod` and configure a managed PostgreSQL database:
-
-```bash
-SPRING_PROFILES_ACTIVE=prod
-DATABASE_URL=jdbc:postgresql://HOST:5432/evshare
-DB_USERNAME=...
-DB_PASSWORD=...
-PORT=8080
-```
-
-The production profile disables H2, uses Flyway migrations, and sets Hibernate to `validate` rather than auto-mutating the schema. Back up PostgreSQL and test restore procedures before launch. Use a managed secret store; never commit credentials.
-
-Build and run the Docker image:
-
-```bash
-docker build -t evshare:latest .
-docker run --rm -p 8080:8080 \
-  -e SPRING_PROFILES_ACTIVE=prod \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e DB_USERNAME="$DB_USERNAME" \
-  -e DB_PASSWORD="$DB_PASSWORD" evshare:latest
-```
-
-Health endpoint: `/actuator/health`. Only health/info/metrics are exposed; health details are hidden.
-
 ## API
 
 - `GET /api/chargers?city=Prayagraj`
 - `GET /api/chargers/{id}`
 - `POST /api/chargers`
-- `POST /api/bookings`
+- `POST /api/bookings` — reserves a slot and returns an estimated cost; no payment is collected
 - `GET /api/bookings/{id}`
-- `POST /api/payments/paytm/initiate` — creates a server-side Paytm staging transaction and returns a transaction token
-- `POST /api/payments/paytm/verify` — verifies final status server-to-server through Paytm's Order Status API
-- `POST /api/payments/paytm/callback` — notification only; independently rechecks status with Paytm
 
-## Paytm staging integration
+There are no payment endpoints.
 
-The app defaults to Paytm **STAGING** and uses `https://securestage.paytmpayments.com`. Configure `PAYTM_MID` and `PAYTM_MERCHANT_KEY` from the Paytm Dashboard Test API Details. `PAYTM_WEBSITE_NAME` defaults to `WEBSTAGING`; set `PAYTM_CALLBACK_URL` to your public HTTPS callback URL. Copy `.env.example` as a deployment reference, but store actual secrets only in your hosting provider's secret manager.
+## Charger specifications and quality
 
-The backend generates a request checksum, calls Initiate Transaction, and passes the returned transaction token to Paytm CheckoutJS. After checkout, it calls `/v3/order/status` server-to-server and confirms the booking only when Paytm reports `TXN_SUCCESS` and the returned transaction amount matches the server-calculated booking amount. A browser callback alone never marks a booking paid. The merchant key is never sent to the browser. Staging transactions are test transactions and do not collect real money. Use Paytm's official checksum implementation and staging test credentials when validating the integration against your merchant account; run the complete Paytm sandbox test suite before any production switch.
+Host listings capture manufacturer, model, AC/DC type, rated kW, connector, voltage, phase, current, IP rating, safety certification, warranty, installation year, inspection date, smart features and condition notes. Customers see these details before booking. Condition grades are `EXCELLENT`, `GOOD`, `FAIR`, and `NEEDS_REPAIR`; listings marked `NEEDS_REPAIR` cannot be booked. Host and safety verification flags remain false by default. Certification and IP information are host-provided until an admin verification workflow is implemented. Advertised rate is constrained by the UI to ₹10–₹20/kWh.
 
-Official references: [Initiate Transaction](https://www.paytmpayments.com/docs/api/initiate-transaction-api/), [JS Checkout](https://www.paytmpayments.com/docs/jscheckout-initiate-payment), [Verify Payment Status](https://www.paytmpayments.com/docs/jscheckout-verify-payment), [Checksum](https://www.paytmpayments.com/docs/checksum-implementation/).
+## Deployment on Render (optional)
 
-## Charger specification and quality information
+1. Push the contents of this `evshare` folder to a GitHub repository, keeping `render.yaml` and `Dockerfile` at the repository root.
+2. In Render, choose **New → Blueprint**, connect the repository and let Render read `render.yaml`.
+3. Review and create the web service and managed PostgreSQL database.
+4. Render injects database connection details from the managed database resource. No payment credentials or gateway settings are required.
 
-Host listings now capture manufacturer, model, AC/DC type, rated kW, connector, voltage, phase, current, IP rating, safety certification, warranty, installation year, inspection date, smart features, and condition notes. Customers see these details before booking. Condition grades are `EXCELLENT`, `GOOD`, `FAIR`, and `NEEDS_REPAIR`; listings marked `NEEDS_REPAIR` cannot be booked. Host and safety verification flags remain false by default and are not self-asserted by the host. Certification and IP information are host-provided until an admin verification workflow is implemented. The UI constrains the host's advertised rate to ₹10–₹20/kWh.
+Render is hosting infrastructure only. Its hosting/database plans may incur platform charges; those are unrelated to EVShare customer bookings and are not processed by this application.
 
-## Changes in this hardening pass
+## Operational limitations before public launch
 
-- Added production profile with PostgreSQL-only configuration, schema validation, Flyway migrations and disabled H2 console.
-- Added Actuator health/metrics with limited endpoint exposure.
-- Added security response headers and removed wildcard CORS.
-- Demo data is now restricted to the dev profile.
-- Booking creation now uses a database pessimistic lock on the charger row to reduce concurrent double-booking races across app instances.
-- Added a consistent API exception response that avoids leaking internal exception details.
-- Added a non-root, multi-stage Docker image.
-- Added Paytm staging transaction-token initiation, CheckoutJS handoff and server-to-server transaction status verification.
-- Added charger quality grading and technical specification fields to listings and customer details.
-- Added a `.env.example` for staging setup.
+1. Add verified sign-up/login, customer/host/admin roles, ownership checks and access control before exposing write APIs publicly.
+2. Add address masking; reveal residential address only after an appropriately verified reservation.
+3. Integrate OCPP or a charger's authenticated vendor API and meter readings before presenting final energy billing.
+4. Add rate limiting, audit logs, alerting, backups/restore drills, TLS, domain, uptime monitoring and security review.
+5. Validate electricity resale, DISCOM, housing-society, electrical installation, consumer-protection and tax requirements in each operating jurisdiction.
+6. Run automated tests, dependency/container scans, load tests and a manual security review before launch.
 
-## Mandatory launch blockers
+## Database migration note
 
-1. **Identity and authorization:** Implement verified sign-up/login (OTP or email verification), secure sessions/JWT, customer/host/admin roles, ownership checks on charger edits, and customer-only access to their bookings. Current write/read APIs are not yet adequately access-controlled; do not expose them publicly.
-2. **Paytm:** Staging flow is implemented but still requires validation with your own staging MID/key and Paytm's sandbox test paymodes. Before production, validate checksum compatibility against Paytm's official SDK, add idempotency, refunds, replay protection, reconciliation and operational alerts. Never trust a browser redirect or client-provided payment status. Keep secrets in a secret manager.
-3. **Host settlement:** Integrate a compliant payout solution and reconcile host earnings, platform fees, refunds, chargebacks and tax records. Customer payment does not automatically pay the host.
-4. **Privacy:** Add address masking; reveal the precise residential address only after a confirmed/paid booking. Add consent, retention and account deletion workflows.
-5. **Real energy measurement:** Current pricing is an estimate (`charger kW × duration`). Integrate OCPP or the charger's authenticated vendor API and meter start/end readings before charging a final bill.
-6. **Operations:** Add rate limiting, audit logs, alerting, structured logs with PII redaction, backups/restore drills, TLS, domain, uptime monitoring and a tested incident process.
-7. **Legal and safety:** Validate applicable electricity resale, DISCOM, housing-society, electrical installation, consumer-protection and tax requirements in each operating jurisdiction. Establish host verification, safety checks, cancellation and dispute processes.
-8. **Quality gates:** Run automated unit/integration tests, dependency and container vulnerability scans, load tests, payment sandbox tests and a manual security review before launch.
-
-## Important commercial note
-
-This code is a booking marketplace foundation; it does not switch a charger on/off or independently measure electricity. Do not advertise automatic charging or final metered billing until the hardware integration is implemented and validated.
+Flyway migration `V3__remove_payment_gateway.sql` removes the legacy payment-order and Paytm transaction columns from existing PostgreSQL databases. Historical bookings with `PENDING_PAYMENT` status are migrated to `CONFIRMED` because reservations no longer depend on an in-app payment step. Back up production data before applying migrations.

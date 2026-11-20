@@ -1,0 +1,40 @@
+# Render Blueprint for EVShare. Deploy this file from the evshare project root.
+services:
+  - type: web
+    name: evshare-web
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_HOST
+        fromDatabase:
+          name: evshare-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: evshare-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: evshare-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: evshare-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: evshare-db
+          property: password
+
+databases:
+  - name: evshare-db
+    databaseName: evshare
+    user: evshare_user
+    region: singapore
+    plan: basic-256mb

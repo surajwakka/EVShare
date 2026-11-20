@@ -1,13 +1,12 @@
 package com.evshare.controller;
 import com.evshare.model.*; import com.evshare.repository.*;
-import jakarta.validation.Valid; import org.springframework.beans.factory.annotation.Value; import org.springframework.http.*; import org.springframework.web.bind.annotation.*;
-import java.math.*; import com.evshare.service.PaytmPaymentService; import java.time.*; import java.util.*; import org.springframework.transaction.annotation.Transactional;
+import jakarta.validation.Valid; import org.springframework.http.*; import org.springframework.web.bind.annotation.*;
+import java.math.*; import java.time.*; import java.util.*; import org.springframework.transaction.annotation.Transactional;
 @RestController @RequestMapping("/api")
 
 public class ApiController {
  private final ChargerRepository chargers; private final BookingRepository bookings;
- private final PaytmPaymentService paytm;
- public ApiController(ChargerRepository c, BookingRepository b, PaytmPaymentService paytm){chargers=c;bookings=b;this.paytm=paytm;}
+ public ApiController(ChargerRepository c, BookingRepository b){chargers=c;bookings=b;}
  @GetMapping("/chargers") public List<Charger> list(@RequestParam(required=false) String city){return (city==null||city.isBlank())?chargers.findByActiveTrue():chargers.findByActiveTrueAndCityContainingIgnoreCase(city);}
  @PostMapping("/chargers") public ResponseEntity<?> create(@Valid @RequestBody Charger c){if(c.getConditionGrade()!=null&&!Set.of("EXCELLENT","GOOD","FAIR","NEEDS_REPAIR").contains(c.getConditionGrade().toUpperCase(Locale.ROOT)))return ResponseEntity.badRequest().body(Map.of("error","Choose a valid charger condition grade."));if("NEEDS_REPAIR".equalsIgnoreCase(c.getConditionGrade()))return ResponseEntity.badRequest().body(Map.of("error","Chargers marked as needing repair cannot be listed for bookings."));if(c.getInstallationYear()!=null&&(c.getInstallationYear()<1990||c.getInstallationYear()>Year.now().getValue()))return ResponseEntity.badRequest().body(Map.of("error","Invalid installation year."));c.setHostVerified(false);c.setSafetyVerified(false);return ResponseEntity.status(201).body(chargers.save(c));}
  @GetMapping("/chargers/{id}") public Charger get(@PathVariable Long id){return chargers.findById(id).orElseThrow(()->new NoSuchElementException("Charger not found"));}
@@ -20,25 +19,9 @@ public class ApiController {
    if(conflict)return ResponseEntity.status(409).body(Map.of("error","That time slot is already booked. Please choose another."));
    BigDecimal hours=BigDecimal.valueOf(Duration.between(start,end).toMinutes()).divide(BigDecimal.valueOf(60),3,RoundingMode.HALF_UP);
    BigDecimal units=c.getPowerKw().multiply(hours).setScale(2,RoundingMode.HALF_UP); BigDecimal amount=units.multiply(c.getPricePerKwh()).setScale(2,RoundingMode.HALF_UP);
-   Booking b=new Booking(); b.setChargerId(c.getId()); b.setCustomerName(p.get("customerName").trim()); b.setCustomerEmail(p.get("customerEmail").trim().toLowerCase(Locale.ROOT)); b.setBookingDate(date); b.setStartTime(start); b.setEndTime(end); b.setEstimatedUnits(units); b.setAmount(amount); b.setPaymentOrderId("EVS-"+UUID.randomUUID().toString().substring(0,12).toUpperCase());
-   b=bookings.save(b); return ResponseEntity.status(201).body(Map.of("bookingId",b.getId(),"orderId",b.getPaymentOrderId(),"estimatedUnits",units,"amount",amount,"currency","INR","status",b.getStatus(),"message","Estimate only. Final bill should use the measured energy delivered."));
+   Booking b=new Booking(); b.setChargerId(c.getId()); b.setCustomerName(p.get("customerName").trim()); b.setCustomerEmail(p.get("customerEmail").trim().toLowerCase(Locale.ROOT)); b.setBookingDate(date); b.setStartTime(start); b.setEndTime(end); b.setEstimatedUnits(units); b.setAmount(amount); b.setStatus("CONFIRMED");
+   b=bookings.save(b); return ResponseEntity.status(201).body(Map.of("bookingId",b.getId(),"bookingReference","EVS-"+b.getId(),"estimatedUnits",units,"amount",amount,"currency","INR","status",b.getStatus(),"message","Booking reserved. EVShare does not collect or process payments. Final charging cost should use measured energy delivered."));
   } catch(Exception e){return ResponseEntity.badRequest().body(Map.of("error",e.getMessage()==null?"Invalid booking details":e.getMessage()));}
- }
- @PostMapping("/payments/paytm/initiate") public ResponseEntity<?> paytm(@RequestBody Map<String,String> p){
-  try { String orderId=p.get("orderId"); if(orderId==null||orderId.isBlank())return ResponseEntity.badRequest().body(Map.of("error","orderId is required")); return ResponseEntity.ok(paytm.initiate(orderId)); }
-  catch(IllegalStateException e){return ResponseEntity.status(503).body(Map.of("error",e.getMessage()));}
- }
- @PostMapping("/payments/paytm/verify") public ResponseEntity<?> verifyPaytm(@RequestBody Map<String,String> p){
-  try { return ResponseEntity.ok(paytm.verifyAndUpdate(p.get("orderId"))); }
-  catch(NoSuchElementException e){return ResponseEntity.notFound().build();}
-  catch(IllegalStateException e){return ResponseEntity.status(502).body(Map.of("error",e.getMessage()));}
- }
- @PostMapping("/payments/paytm/callback") public ResponseEntity<?> callback(@RequestParam Map<String,String> params, @RequestBody(required=false) Map<String,String> body){
-  // Callback data is only a notification. The server independently queries Paytm's status API before confirming a booking.
-  String orderId=params.getOrDefault("ORDERID", body==null?null:body.get("ORDERID"));
-  if(orderId==null)return ResponseEntity.badRequest().body(Map.of("error","Missing Paytm order id"));
-  try { return ResponseEntity.ok(paytm.verifyAndUpdate(orderId)); }
-  catch(Exception e){return ResponseEntity.status(502).body(Map.of("error","Payment status could not be verified; booking remains unconfirmed."));}
  }
  @GetMapping("/bookings/{id}") public Booking booking(@PathVariable Long id){return bookings.findById(id).orElseThrow(()->new NoSuchElementException("Booking not found"));}
 }
