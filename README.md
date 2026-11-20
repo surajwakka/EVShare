@@ -62,3 +62,26 @@ Render is hosting infrastructure only. Its hosting/database plans may incur plat
 ## Database migration note
 
 Flyway migration `V3__remove_payment_gateway.sql` removes the legacy payment-order and Paytm transaction columns from existing PostgreSQL databases. Historical bookings with `PENDING_PAYMENT` status are migrated to `CONFIRMED` because reservations no longer depend on an in-app payment step. Back up production data before applying migrations.
+
+
+## Render free-tier deployment
+
+The Blueprint uses `plan: free` for both the web service and Render Postgres to avoid provisioning paid Render instances. Important: Render free web services spin down after inactivity, and free Render Postgres databases expire 30 days after creation and have limited storage/no backups. This configuration is suitable for a demo or temporary evaluation, not production data. Export/backup data and use a durable paid or external managed database before real customer use. Check current Render limits before deploying.
+
+## Paytm staging setup
+
+EVShare uses Paytm staging only by default. It does not switch to production endpoints.
+Set these environment variables in Render after the Blueprint has deployed:
+
+- `PAYTM_ENVIRONMENT=STAGING`
+- `PAYTM_WEBSITE_NAME=WEBSTAGING`
+- `PAYTM_MID` = staging Merchant ID from your Paytm dashboard
+- `PAYTM_MERCHANT_KEY` = staging merchant key (keep it secret)
+- `PAYTM_CALLBACK_URL=https://<your-service>.onrender.com/api/payments/paytm/callback`
+- `PAYTM_CHECKOUT_SCRIPT=https://securestage.paytmpayments.com/merchantpgpui/checkoutjs/merchants/`
+
+Never commit merchant credentials to Git. A booking is held as `PENDING_PAYMENT` and becomes `CONFIRMED` only after the backend independently verifies a successful transaction with Paytm. Without staging credentials, booking creation works but checkout returns a clear configuration error.
+
+## Free Render deployment
+
+The Blueprint uses `plan: free` for both the Docker web service and PostgreSQL database. Render's free web service sleeps after 15 minutes without traffic and may take about a minute to wake. Free PostgreSQL databases expire 30 days after creation and have no backups; export data before expiry. Free tier is for demos/testing, not a durable production marketplace. See https://render.com/docs/free.
