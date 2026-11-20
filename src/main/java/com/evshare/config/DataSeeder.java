@@ -1,0 +1,6 @@
+package com.evshare.config;
+import com.evshare.model.Charger; import com.evshare.repository.ChargerRepository; import org.springframework.boot.CommandLineRunner; import org.springframework.context.annotation.Bean; import org.springframework.context.annotation.Configuration; import org.springframework.context.annotation.Profile; import java.math.BigDecimal;
+@Configuration @Profile("dev") public class DataSeeder {
+ @Bean CommandLineRunner seed(ChargerRepository repo){return args->{if(repo.count()==0){add(repo,"Home AC Charger · Civil Lines","Aarav","Civil Lines, Prayagraj","Prayagraj","AC Wallbox",7.4,"14.50","Type 2","07:00","23:00");add(repo,"Dedicated EV Point · Naini","Meera","Naini, Prayagraj","Prayagraj","AC Wallbox",3.3,"12.00","Type 2","09:00","21:00");add(repo,"Fast Home Charger · Jhunsi","Rohan","Jhunsi, Prayagraj","Prayagraj","AC Wallbox",7.0,"16.00","CCS2","08:00","22:00");}};}
+ private void add(ChargerRepository r,String title,String host,String address,String city,String type,double kw,String price,String connector,String from,String to){Charger c=new Charger();c.setTitle(title);c.setHostName(host);c.setAddress(address);c.setCity(city);c.setChargerType(type);c.setPowerKw(BigDecimal.valueOf(kw));c.setPricePerKwh(new BigDecimal(price));c.setConnectorType(connector);c.setAvailableFrom(from);c.setAvailableTo(to);r.save(c);}
+}
