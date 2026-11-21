@@ -85,3 +85,21 @@ Never commit merchant credentials to Git. A booking is held as `PENDING_PAYMENT`
 ## Free Render deployment
 
 The Blueprint uses `plan: free` for both the Docker web service and PostgreSQL database. Render's free web service sleeps after 15 minutes without traffic and may take about a minute to wake. Free PostgreSQL databases expire 30 days after creation and have no backups; export data before expiry. Free tier is for demos/testing, not a durable production marketplace. See https://render.com/docs/free.
+
+
+## Progressive Web App (PWA)
+
+EVShare includes installable PWA support:
+- `src/main/resources/static/manifest.webmanifest` defines the app name, standalone display mode, theme and icons.
+- `src/main/resources/static/sw.js` caches the static app shell and provides an offline fallback page.
+- `src/main/resources/static/icons/` contains 192px, 512px and maskable app icons.
+- The frontend registers the service worker and displays an Install app button when the browser supports the install prompt.
+
+### Deploy and install
+1. Push the updated project to the GitHub repository connected to Render.
+2. Render redeploys the existing `evshare-web` service. No additional Render service or paid plan is required.
+3. Open the HTTPS app URL in Chrome on Android.
+4. Use the in-app Install app button when shown, or Chrome menu → Install app / Add to Home screen.
+
+### Offline behaviour
+The PWA caches only the static UI shell. Charger search, account actions, booking creation, database access and Paytm checkout still require internet. API responses and payment flows are deliberately not cached. The installed PWA continues to use the existing Spring Boot backend and PostgreSQL database.

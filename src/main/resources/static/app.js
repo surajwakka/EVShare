@@ -13,3 +13,26 @@ loadChargers();
 
 async function startPaytm(orderId){try{let r=await fetch('/api/payments/paytm/initiate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId})});let data=await r.json();if(!r.ok)throw Error(data.error||'Paytm staging initialization failed');if(!window.Paytm||!window.Paytm.CheckoutJS){await new Promise((resolve,reject)=>{let script=document.createElement('script');script.src=data.checkoutScript;script.onload=resolve;script.onerror=()=>reject(Error('Could not load Paytm CheckoutJS'));document.head.appendChild(script)});}await window.Paytm.CheckoutJS.init({root:'#paytmCheckout',flow:'DEFAULT',data:{orderId:data.orderId,token:data.txnToken,tokenType:'TXN_TOKEN',amount:Number(data.amount).toFixed(2)},merchant:{mid:data.mid, name:'EVShare'},handler:{notifyMerchant:function(eventName,eventData){console.log('Paytm event',eventName);},transactionStatus:function(paymentStatus){verifyPaytm(orderId);}}});window.Paytm.CheckoutJS.invoke();}catch(e){toast(e.message||'Unable to start Paytm checkout.')}}
 async function verifyPaytm(orderId){try{let r=await fetch('/api/payments/paytm/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId})});let data=await r.json();if(!r.ok)throw Error(data.error||'Could not verify payment');if(data.paymentStatus==='PAID'){showModal(`<h2>Payment successful ✓</h2><p>Your booking is confirmed.</p><div class="estimate">Booking: ${esc(orderId)}<br>Payment status: PAID</div><button class="primary full" onclick="closeModal()">Done</button>`);toast('Payment verified by Paytm.')}else{toast('Paytm status: '+data.gatewayStatus+'. Booking is not confirmed yet.');}}catch(e){toast(e.message)}}
+
+// PWA: register the service worker and expose an install action where supported.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(error => console.warn("EVShare service worker registration failed:", error));
+  });
+}
+let evshareInstallPrompt = null;
+const evshareInstallButton = document.getElementById("installAppBtn");
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault(); evshareInstallPrompt = event;
+  if (evshareInstallButton) evshareInstallButton.hidden = false;
+});
+if (evshareInstallButton) {
+  evshareInstallButton.addEventListener("click", async () => {
+    if (!evshareInstallPrompt) return;
+    evshareInstallPrompt.prompt(); await evshareInstallPrompt.userChoice;
+    evshareInstallPrompt = null; evshareInstallButton.hidden = true;
+  });
+}
+window.addEventListener("appinstalled", () => {
+  evshareInstallPrompt = null; if (evshareInstallButton) evshareInstallButton.hidden = true;
+});
