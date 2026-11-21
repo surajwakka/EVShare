@@ -1,4 +1,4 @@
-# EVShare — Java EV Home-Charging Marketplace
+# EVShare - EV Home-Charging Marketplace
 
 Spring Boot 3 / Java 17 application with a responsive browser UI, charger discovery, host listings, time-slot reservations and estimated kWh-based pricing.
 
