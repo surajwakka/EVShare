@@ -1,5 +1,5 @@
 const CACHE_NAME = "evshare-shell-v1";
-const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/offline.html", "/icons/evshare-192.png", "/icons/evshare-512.png", "/icons/evshare-maskable-512.png"];
+const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.json", "/offline.html", "/icons/evshare-192.png", "/icons/evshare-512.png", "/icons/evshare-maskable-512.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
